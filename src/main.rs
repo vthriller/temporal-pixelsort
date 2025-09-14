@@ -108,15 +108,14 @@ fn main() {
 				while hist.get(0) == Some(&0) {
 					hist.pop_front();
 				}
-				// len < 256 means 0th element is actually (256-len)th one
-				let offset = 256 - hist.len();
-				for (val, count) in hist.iter_mut().enumerate() {
-					if *count > 0 {
-						*count -= 1;
-						return Some((val+offset) as u8);
-					}
+				if hist.is_empty() {
+					// collect() into `frame = None`, signalling that we drained the histogram
+					return None;
 				}
-				None // collect() into `frame = None`, signalling that we drained the histogram
+				hist[0] -= 1;
+				// len < 256 means 0th element is actually (256-len)th one
+				// because we already checked previous (256-len-1)
+				Some((256 - hist.len()) as u8)
 			})
 			.collect();
 		match frame {
