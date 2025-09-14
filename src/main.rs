@@ -104,6 +104,9 @@ fn main() {
 		let frame: Option<Vec<_>> =
 			histograms.par_iter_mut()
 			.map(|hist| {
+				while hist.get(0) == Some(&0) {
+					hist.remove(0);
+				}
 				for (val, count) in hist.iter_mut().enumerate() {
 					if *count > 0 {
 						*count -= 1;
