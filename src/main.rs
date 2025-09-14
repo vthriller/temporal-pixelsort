@@ -4,6 +4,7 @@ use std::io::{
 	Read,
 	Write,
 };
+use rayon::prelude::*;
 
 #[derive(serde::Deserialize, Debug)]
 struct Meta {
@@ -66,8 +67,10 @@ fn main() {
 			// TODO distinguish UnexpectedEof with 0 bytes read, other UnexpectedEofs, other errors
 			break;
 		}
-		for i in 0..chunk_size {
-			histograms[i][ frame[i] as usize ] += 1;
-		}
+		histograms.par_iter_mut()
+			.zip(frame.par_iter())
+			.for_each(|(hist, &val)| {
+				hist[val as usize] += 1;
+			});
 	}
 }
