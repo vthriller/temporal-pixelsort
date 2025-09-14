@@ -6,6 +6,7 @@ use std::io::{
 	BufWriter,
 };
 use rayon::prelude::*;
+use std::collections::BTreeMap;
 
 #[derive(serde::Deserialize, Debug)]
 struct Meta {
@@ -66,7 +67,7 @@ fn main() {
 	let mut frame = vec![0; chunk_size];
 	// 2^16 frames at 30 FPS is 36:24 and a change
 	// 2^32 frames at 60 FPS is over 828 days, that should be enough
-	let mut histograms: Vec<Vec<u32>> = vec![vec![0; 256]; chunk_size];
+	let mut histograms: Vec<BTreeMap<u8, u32>> = vec![BTreeMap::new(); chunk_size];
 	//let ffmpeg = BufReader::with_capacity(chunk_size, ffmpeg);
 	loop {
 		if ffmpeg.read_exact(&mut frame).is_err() {
@@ -79,7 +80,7 @@ fn main() {
 			.zip(fchunks.into_par_iter())
 			.for_each(|(hc, fc)| {
 				for (hist, &val) in hc.iter_mut().zip(fc.iter()) {
-				hist[val as usize] += 1;
+					*hist.entry(val).or_default() += 1;
 				}
 			});
 	}
@@ -104,11 +105,14 @@ fn main() {
 		let frame: Option<Vec<_>> =
 			histograms.par_iter_mut()
 			.map(|hist| {
-				for (val, count) in hist.iter_mut().enumerate() {
-					if *count > 0 {
-						*count -= 1;
-						return Some(val as u8);
+				if let Some((&k, &v)) = hist.first_key_value() {
+					if v == 0 {
+						hist.remove(&k);
 					}
+				}
+				for (val, count) in hist.iter_mut() {
+					*count -= 1;
+					return Some(*val);
 				}
 				None // collect() into `frame = None`, signalling that we drained the histogram
 			})
