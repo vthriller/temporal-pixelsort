@@ -6,6 +6,7 @@ use std::io::{
 	BufWriter,
 };
 use rayon::prelude::*;
+use std::collections::VecDeque;
 
 #[derive(serde::Deserialize, Debug)]
 struct Meta {
@@ -66,7 +67,7 @@ fn main() {
 	let mut frame = vec![0; chunk_size];
 	// 2^16 frames at 30 FPS is 36:24 and a change
 	// 2^32 frames at 60 FPS is over 828 days, that should be enough
-	let mut histograms: Vec<Vec<u32>> = vec![vec![0; 256]; chunk_size];
+	let mut histograms: Vec<VecDeque<u32>> = vec![VecDeque::from([0; 256]); chunk_size];
 	//let ffmpeg = BufReader::with_capacity(chunk_size, ffmpeg);
 	loop {
 		if ffmpeg.read_exact(&mut frame).is_err() {
@@ -105,7 +106,7 @@ fn main() {
 			histograms.par_iter_mut()
 			.map(|hist| {
 				while hist.get(0) == Some(&0) {
-					hist.remove(0);
+					hist.pop_front();
 				}
 				for (val, count) in hist.iter_mut().enumerate() {
 					if *count > 0 {
