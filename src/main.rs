@@ -3,6 +3,7 @@ use std::io::{
 	self,
 	Read,
 	Write,
+	BufWriter,
 };
 use rayon::prelude::*;
 
@@ -15,12 +16,14 @@ struct Stream {
 	codec_type: String,
 	width: Option<usize>,
 	height: Option<usize>,
+	r_frame_rate: Option<String>,
 }
 
 fn main() {
 	let mut args = std::env::args();
 	let _ = args.next();
-	let fname = args.next().expect("missing argument");
+	let fname = args.next().expect("missing argument: fname");
+	let outname = args.next().expect("missing argument: outname");
 
 	let ffprobe = Command::new("ffprobe")
 		.args([
@@ -42,7 +45,10 @@ fn main() {
 		panic!("expected exactly one video stream, found {}", stream.len());
 	}
 	let stream = stream.pop().unwrap();
-	let chunk_size = stream.width.expect("missing width") * stream.height.expect("missing height") * 3; // x3 for each channel
+	let width = stream.width.expect("missing width");
+	let height = stream.height.expect("missing height");
+	let chunk_size = width * height * 3; // x3 for each channel
+	let framerate = stream.r_frame_rate.expect("missing framerate");
 
 	let ffmpeg = Command::new("ffmpeg")
 		.args([
@@ -77,4 +83,45 @@ fn main() {
 				}
 			});
 	}
+
+	let mut ffmpeg = Command::new("ffmpeg")
+		.args([
+			"-y", // XXX should probably let user decide whether to err out on existing file or overwrite it
+			"-f", "rawvideo",
+			"-pix_fmt", "rgb24",
+			"-framerate", &framerate,
+			"-s", &format!("{width}x{height}"),
+			"-i", "-",
+			"-c:v", "libx264",
+			&outname,
+		])
+		.stdin(Stdio::piped())
+		.spawn()
+		.expect("failed to run ffmpeg");
+	let input = ffmpeg.stdin.as_mut().expect("missing ffmpeg stdin o_O");
+	let mut input = BufWriter::new(input);
+	loop {
+		let frame: Option<Vec<_>> =
+			histograms.par_iter_mut()
+			.map(|hist| {
+				for (val, count) in hist.iter_mut().enumerate() {
+					if *count > 0 {
+						*count -= 1;
+						return Some(val as u8);
+					}
+				}
+				None // collect() into `frame = None`, signalling that we drained the histogram
+			})
+			.collect();
+		match frame {
+			Some(f) => {
+				input.write(f.as_slice()).expect("failed to feed ffmpeg");
+			},
+			None => break,
+		}
+	}
+	// this will flush BufWriter
+	let _ = input.into_inner().unwrap();
+	// this will flush raw stdin
+	ffmpeg.wait().unwrap();
 }
