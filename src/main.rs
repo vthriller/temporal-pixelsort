@@ -67,10 +67,14 @@ fn main() {
 			// TODO distinguish UnexpectedEof with 0 bytes read, other UnexpectedEofs, other errors
 			break;
 		}
-		histograms.par_iter_mut()
-			.zip(frame.par_iter())
-			.for_each(|(hist, &val)| {
+		let hchunks: Vec<_> = histograms.chunks_mut(131072).collect();
+		let fchunks: Vec<_> = frame.chunks(131072).collect();
+		hchunks.into_par_iter()
+			.zip(fchunks.into_par_iter())
+			.for_each(|(hc, fc)| {
+				for (hist, &val) in hc.iter_mut().zip(fc.iter()) {
 				hist[val as usize] += 1;
+				}
 			});
 	}
 }
