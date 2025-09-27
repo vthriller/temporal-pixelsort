@@ -7,6 +7,20 @@ use std::io::{
 };
 use rayon::prelude::*;
 use std::collections::VecDeque;
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(version, about)]
+struct Args {
+	src: String,
+	/* FIXME:
+	- `--` is required with `last = true`
+		- OTOH that's probably a good thing, no way to confuse ffmpeg flags with our oun if we'd decide to add some
+	- how to enforce at least one value in here? `num_args(1..)` doesn't seem to work
+	*/
+	#[arg(last = true)]
+	out_args: Vec<String>,
+}
 
 #[derive(serde::Deserialize, Debug)]
 struct Meta {
@@ -21,17 +35,14 @@ struct Stream {
 }
 
 fn main() {
-	let mut args = std::env::args();
-	let _ = args.next();
-	let fname = args.next().expect("missing argument: fname");
-	let outname = args.next().expect("missing argument: outname");
+	let args = Args::parse();
 
 	let ffprobe = Command::new("ffprobe")
 		.args([
 			"-v", "error",
 			"-print_format", "json",
 			"-show_streams",
-			&fname,
+			&args.src,
 		])
 		.output()
 		.expect("failed to run ffprobe");
@@ -53,7 +64,7 @@ fn main() {
 
 	let ffmpeg = Command::new("ffmpeg")
 		.args([
-			"-i", &fname,
+			"-i", &args.src,
 			"-v", "error",
 			"-pix_fmt", "rgb24",
 			"-vcodec", "rawvideo",
@@ -85,17 +96,17 @@ fn main() {
 			});
 	}
 
-	let mut ffmpeg = Command::new("ffmpeg")
-		.args([
-			"-y", // XXX should probably let user decide whether to err out on existing file or overwrite it
+	let size = format!("{width}x{height}");
+	let mut ffmpeg = vec![
 			"-f", "rawvideo",
 			"-pix_fmt", "rgb24",
 			"-framerate", &framerate,
-			"-s", &format!("{width}x{height}"),
+			"-s", &size,
 			"-i", "-",
-			"-c:v", "libx264",
-			&outname,
-		])
+	];
+	ffmpeg.extend(args.out_args.iter().map(|s| s.as_str()));
+	let mut ffmpeg = Command::new("ffmpeg")
+		.args(ffmpeg)
 		.stdin(Stdio::piped())
 		.spawn()
 		.expect("failed to run ffmpeg");
