@@ -98,6 +98,15 @@ fn main() {
 
 	let size = format!("{width}x{height}");
 	let mut ffmpeg = vec![
+			/* FIXME
+			we cannot let ffmpeg ask user whether to overwrite file or not
+			(because we hijacked its stdin)
+			and we also cannot pass it through other fd because:
+			- `Command` has now way of telling `Stdio::piped()` for anything other than std{in,out,err}
+			- `/dev/fd/4` is not portable?
+			*/
+			"-y",
+
 			"-f", "rawvideo",
 			"-pix_fmt", "rgb24",
 			"-framerate", &framerate,
